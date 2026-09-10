@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: biblioteca-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_KEY
+        sync: false # gerar com "php artisan key:generate --show" e colar no painel do Render
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        sync: false # host do projeto Supabase
+      - key: DB_PORT
+        value: 5432
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: FRONTEND_URL
+        sync: false # URL do projeto publicado no Vercel, ex.: https://biblioteca.vercel.app

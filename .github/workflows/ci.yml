@@ -1,0 +1,106 @@
+name: CI
+
+# Roda em todo push e pull request para a branch principal.
+# Se o time optar por repositórios separados (back-end e front-end), copie
+# este arquivo para o .github/workflows/ci.yml de cada repositório e remova
+# o job que não se aplica àquele repositório.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Back-end (Laravel)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: biblioteca-api
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: biblioteca_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo, pdo_pgsql, mbstring, zip
+          coverage: none
+
+      - name: Instalar dependências (Composer)
+        run: composer install --prefer-dist --no-progress
+
+      - name: Preparar ambiente de teste
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Rodar lint (Laravel Pint)
+        run: vendor/bin/pint --test
+
+      - name: Rodar testes automatizados
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: biblioteca_test
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+        run: php artisan test
+
+  frontend:
+    name: Front-end (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: biblioteca-front
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: biblioteca-front/package-lock.json
+
+      - name: Instalar dependências (npm)
+        run: npm ci
+
+      - name: Rodar lint
+        run: npm run lint
+
+      - name: Rodar testes automatizados
+        run: npm run test
+
+      - name: Build de produção
+        run: npm run build
+
+  # Job opcional: dispara o deploy do back-end no Render assim que os testes
+  # passam na branch main. O Render já faz auto-deploy sozinho quando conectado
+  # ao GitHub — este passo só é necessário se você preferir controlar o deploy
+  # explicitamente pelo pipeline (ex.: só implantar depois do CI verde).
+  deploy-homologacao:
+    name: Deploy (homologação)
+    needs: [backend, frontend]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar deploy hook do Render
+        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
